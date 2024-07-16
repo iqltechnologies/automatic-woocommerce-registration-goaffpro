@@ -248,6 +248,8 @@ function refer_and_earn_content() {
         echo '<p>' . esc_url($referral_link) . '</p>';
     } else {
         echo '<p>' . __('You do not have an affiliate account yet.', 'goaffpro') . '</p>';
+        echo '<a href="#" id="create-affiliate-account" class="button">' . __('Create Affiliate Account', 'goaffpro') . '</a>';
+        echo '<div id="affiliate-account-error" style="color: red;"></div>';
     }
 }
 
@@ -256,4 +258,61 @@ add_action('init', 'add_refer_and_earn_endpoint');
 
 function add_refer_and_earn_endpoint() {
     add_rewrite_endpoint('refer-and-earn', EP_ROOT | EP_PAGES);
+}
+
+// Enqueue scripts
+add_action('wp_enqueue_scripts', 'enqueue_goaffpro_scripts');
+
+function enqueue_goaffpro_scripts() {
+    if (is_account_page()) {
+        wp_enqueue_script('goaffpro-scripts', plugin_dir_url(__FILE__) . 'goaffpro-scripts.js', array('jquery'), '1.0', true);
+        wp_localize_script('goaffpro-scripts', 'goaffpro_ajax', array('ajax_url' => admin_url('admin-ajax.php')));
+    }
+}
+
+// Handle AJAX request to create affiliate account
+add_action('wp_ajax_create_affiliate_account', 'create_affiliate_account_ajax');
+add_action('wp_ajax_nopriv_create_affiliate_account', 'create_affiliate_account_ajax');
+
+function create_affiliate_account_ajax() {
+    $user_id = get_current_user_id();
+    $user = get_userdata($user_id);
+    $email = $user->user_email;
+    $first_name = get_user_meta($user_id, 'billing_first_name', true);
+    $last_name = get_user_meta($user_id, 'billing_last_name', true);
+    $password = wp_generate_password();
+    
+    $api_key = get_option('goaffpro_api_key');
+    $api_secret = get_option('goaffpro_api_secret');
+    
+    $url = 'https://api.goaffpro.com/v1/sdk/user/register';
+    
+    $data = array(
+        'name' => $first_name . ' ' . $last_name,
+        'email' => $email,
+        'password' => $password,
+    );
+    
+    $response = wp_remote_post($url, array(
+        'method'    => 'POST',
+        'body'      => json_encode($data),
+        'headers'   => array(
+            'Content-Type' => 'application/json',
+            'accept'       => 'application/json',
+        ),
+    ));
+    
+    if (is_wp_error($response)) {
+        wp_send_json_error(array('message' => $response->get_error_message()));
+    } else {
+        $body = wp_remote_retrieve_body($response);
+        $result = json_decode($body, true);
+        
+        if ($result['success']) {
+            update_user_meta($user_id, 'goaffpro_affiliate_id', $result['data']['affiliate_id']);
+            wp_send_json_success(array('message' => __('Affiliate account created successfully.', 'goaffpro')));
+        } else {
+            wp_send_json_error(array('message' => $result['message']));
+        }
+    }
 }
