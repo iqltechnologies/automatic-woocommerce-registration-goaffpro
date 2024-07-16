@@ -57,7 +57,8 @@ function create_goaffpro_account($customer_id) {
         
         if ($result['success']) {
             // Account created successfully
-            // You can store the affiliate ID or perform other actions if needed
+            // Store the affiliate ID in user meta
+            update_user_meta($customer_id, 'goaffpro_affiliate_id', $result['data']['affiliate_id']);
         } else {
             // Handle failure
             error_log('GoAffPro API request failed: ' . $result['message']);
@@ -84,7 +85,8 @@ add_action('admin_init', 'goaffpro_settings_init');
 function goaffpro_settings_init() {
     register_setting('goaffpro_settings', 'goaffpro_api_key');
     register_setting('goaffpro_settings', 'goaffpro_api_secret');
-    
+    register_setting('goaffpro_settings', 'goaffpro_show_refer_and_earn');
+
     add_settings_section(
         'goaffpro_settings_section',
         __('GoAffPro API Settings', 'goaffpro'),
@@ -107,6 +109,14 @@ function goaffpro_settings_init() {
         'goaffpro_settings',
         'goaffpro_settings_section'
     );
+
+    add_settings_field(
+        'goaffpro_show_refer_and_earn',
+        __('Show Refer and Earn', 'goaffpro'),
+        'goaffpro_show_refer_and_earn_render',
+        'goaffpro_settings',
+        'goaffpro_settings_section'
+    );
 }
 
 function goaffpro_api_key_render() {
@@ -117,6 +127,11 @@ function goaffpro_api_key_render() {
 function goaffpro_api_secret_render() {
     $value = get_option('goaffpro_api_secret');
     echo '<input type="text" name="goaffpro_api_secret" value="' . esc_attr($value) . '">';
+}
+
+function goaffpro_show_refer_and_earn_render() {
+    $value = get_option('goaffpro_show_refer_and_earn');
+    echo '<input type="checkbox" name="goaffpro_show_refer_and_earn" ' . checked(1, $value, false) . ' value="1">';
 }
 
 function goaffpro_settings_section_callback() {
@@ -133,10 +148,44 @@ function goaffpro_options_page() {
         submit_button();
         ?>
     </form>
-
-    <p>
-        <a href="https://iqltech.com">Need Help?</a> Hire IQL Technologies as Your Developer
-    </p>
-
     <?php
 }
+
+// Add "Refer and Earn" tab to WooCommerce "My Account" page
+add_filter('woocommerce_account_menu_items', 'add_refer_and_earn_link');
+
+function add_refer_and_earn_link($menu_links) {
+    $show_refer_and_earn = get_option('goaffpro_show_refer_and_earn');
+    if ($show_refer_and_earn) {
+        // Insert "Refer and Earn" after Dashboard
+        $new = array_slice($menu_links, 0, 1, true) + 
+               array('refer-and-earn' => __('Refer and Earn', 'goaffpro')) + 
+               array_slice($menu_links, 1, null, true);
+        return $new;
+    }
+    return $menu_links;
+}
+
+// Add content to "Refer and Earn" tab
+add_action('woocommerce_account_refer-and-earn_endpoint', 'refer_and_earn_content');
+
+function refer_and_earn_content() {
+    $user_id = get_current_user_id();
+    $affiliate_id = get_user_meta($user_id, 'goaffpro_affiliate_id', true);
+    
+    if ($affiliate_id) {
+        $referral_link = 'https://your-goaffpro-domain.com/?ref=' . $affiliate_id;
+        echo '<h3>' . __('Here is your link', 'goaffpro') . '</h3>';
+        echo '<p>' . esc_url($referral_link) . '</p>';
+    } else {
+        echo '<p>' . __('You do not have an affiliate account yet.', 'goaffpro') . '</p>';
+    }
+}
+
+// Register "Refer and Earn" endpoint
+add_action('init', 'add_refer_and_earn_endpoint');
+
+function add_refer_and_earn_endpoint() {
+    add_rewrite_endpoint('refer-and-earn', EP_ROOT | EP_PAGES);
+}
+
