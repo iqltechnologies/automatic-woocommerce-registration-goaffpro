@@ -18,9 +18,9 @@ function create_goaffpro_account($customer_id) {
     // Get user data
     $user = get_userdata($customer_id);
     $email = $user->user_email;
-    $first_name = $user->first_name;
-    $last_name = $user->last_name;
-    $password = wp_generate_password(); // Generate a random password or use a predefined one
+    $first_name = get_user_meta($customer_id, 'billing_first_name', true);
+    $last_name = get_user_meta($customer_id, 'billing_last_name', true);
+    $password = $_POST['password']; // Get the password from the registration form
     
     // Get GoAffPro API credentials from options
     $api_key = get_option('goaffpro_api_key');
@@ -188,4 +188,3 @@ add_action('init', 'add_refer_and_earn_endpoint');
 function add_refer_and_earn_endpoint() {
     add_rewrite_endpoint('refer-and-earn', EP_ROOT | EP_PAGES);
 }
-
